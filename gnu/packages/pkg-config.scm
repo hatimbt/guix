@@ -31,7 +31,9 @@
   #:use-module (gnu packages bash)
   #:use-module (gnu packages check)
   #:use-module (guix memoization)
-  #:export (pkg-config
+  #:use-module (srfi srfi-1)
+  #:export (old-pkg-config              ;the original
+            pkg-config                  ;alias for pkgconf-as-pkg-config
             pkgconf
             pkgconf-as-pkg-config))
 
@@ -89,7 +91,9 @@ on where to find glib (or other libraries).  It is language-agnostic, so
 it can be used for defining the location of documentation tools, for
 instance.")))
 
-(define-public %pkgconf
+;;; This is the package exposed to the CLI, to ease updates via 'guix
+;;; refresh'.
+(define-public %pkgconf-with-tests
   (package
     (name "pkgconf")
     (version "2.1.0")
@@ -119,6 +123,13 @@ such as compilers and IDEs to discover and use libraries configured by
 pkgconf.")
     (license isc)))
 
+;;; This is the minimal, untested variant used to avoid circular dependencies.
+(define-public %pkgconf
+  (hidden-package
+   (package/inherit %pkgconf-with-tests
+     (arguments (list #:tests? #f))
+     (native-inputs '()))))
+
 (define-public %pkgconf-as-pkg-config
   (package/inherit %pkgconf
     (name "pkgconf-as-pkg-config")
@@ -145,7 +156,8 @@ pkgconf.")
                          (string-append #$output "/share/aclocal"))))))))
     (native-inputs '())
     (inputs (list %pkgconf))
-    (propagated-inputs '())))
+    (propagated-inputs '())
+    (properties (alist-delete 'hidden? (package-properties %pkgconf)))))
 
 
 ;;;
@@ -220,7 +232,7 @@ GNU triplet."
 ;; These are a hacks for automatically choosing the native or the cross
 ;; `pkg-config' depending on whether it's being used in a cross-build
 ;; environment or not.
-(define-syntax pkg-config
+(define-syntax old-pkg-config
   (identifier-syntax (pkg-config-for-target (%current-target-system))))
 
 (define-syntax pkgconf
@@ -229,6 +241,11 @@ GNU triplet."
 (define-syntax pkgconf-as-pkg-config
   (identifier-syntax (pkgconf-as-pkg-config-for-target
                       (%current-target-system))))
+
+;;; This alias is to ensure we use pkgconf instead of pkg-config across Guix,
+;;; which includes welcome refinements such as proper handling of the
+;;; Requires.private field.
+(define pkg-config pkgconf-as-pkg-config)
 
 
 ;;;

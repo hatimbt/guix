@@ -3356,13 +3356,13 @@ exec ~a/bin/~a-~a -B~a/lib -Wl,-dynamic-linker -Wl,~a/~a \"$@\"~%"
 
 (define (make-gnu-make-final)
   "Compute the final GNU Make, which uses the final Guile."
+  ;; Avoid a circular dependency by creating a new bootstrap pkg-config
+  ;; variant.
   (let ((pkg-config (package
-                      (inherit %pkg-config)       ;the native pkg-config
-                      (inputs `(("guile" ,guile-final)
-                                ,@(%boot5-inputs)))
-                      (arguments
-                       `(#:implicit-inputs? #f
-                         ,@(package-arguments %pkg-config))))))
+                      ;; Refer to %pkgconf-as-pkg-config instead of
+                      ;; pkgconf-as-pkg-config to ensure native package is
+                      ;; used.
+                      (inherit (with-boot5 %pkgconf-as-pkg-config)))))
     (package
       (inherit (package-with-bootstrap-guile gnu-make))
       (inputs `(("guile" ,guile-final)
@@ -3371,7 +3371,6 @@ exec ~a/bin/~a-~a -B~a/lib -Wl,-dynamic-linker -Wl,~a/~a \"$@\"~%"
       (arguments
        `(#:implicit-inputs? #f
          ,@(package-arguments gnu-make))))))
-
 
 (define coreutils-final
   ;; The final Coreutils.  Treat them specially because some packages, such as
