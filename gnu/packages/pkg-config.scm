@@ -31,11 +31,18 @@
   #:use-module (gnu packages bash)
   #:use-module (gnu packages check)
   #:use-module (guix memoization)
-  #:export (pkg-config))
+  #:export (pkg-config
+            pkgconf
+            pkgconf-as-pkg-config))
 
-;; This is the "primitive" pkg-config package.  People should use `pkg-config'
-;; (see below) rather than `%pkg-config', but we export `%pkg-config' so that
-;; `fold-packages' finds it.
+
+;;;
+;;; "Primitive" pkg-config packages.
+;;;
+
+;; The %-less variants defined below should be used instead; the %-prefixed
+;; "primitive" packages are exported so that `fold-packages' can find them,
+;; making them available for use via the Guix CLI.
 (define-public %pkg-config
   (package
    (name "pkg-config")
@@ -82,95 +89,7 @@ on where to find glib (or other libraries).  It is language-agnostic, so
 it can be used for defining the location of documentation tools, for
 instance.")))
 
-(define cross-pkg-config
-  (mlambda (target)
-    "Return a pkg-config for TARGET, essentially just a wrapper called
-`TARGET-pkg-config', as `configure' scripts like it."
-    ;; See <http://www.flameeyes.eu/autotools-mythbuster/pkgconfig/cross-compiling.html>
-    ;; for details.
-    (package
-      (inherit %pkg-config)
-      (name (string-append (package-name %pkg-config) "-" target))
-      (build-system trivial-build-system)
-      (arguments
-       `(#:modules ((guix build utils))
-         #:builder (begin
-                     (use-modules (guix build utils))
-
-                     (let* ((in     (assoc-ref %build-inputs "pkg-config"))
-                            (out    (assoc-ref %outputs "out"))
-                            (bin    (string-append out "/bin"))
-                            (prog   (string-append ,target "-pkg-config"))
-                            (native (string-append in "/bin/pkg-config")))
-
-                       (mkdir-p bin)
-
-                       ;; Create a `TARGET-pkg-config' -> `pkg-config' symlink.
-                       ;; This satisfies the pkg.m4 macros, which use
-                       ;; AC_PROG_TOOL to determine the `pkg-config' program
-                       ;; name.
-                       (symlink native (string-append bin "/" prog))
-
-                       ;; Also make 'pkg.m4' available, some packages might
-                       ;; expect it.
-                       (mkdir-p (string-append out "/share"))
-                       (symlink (string-append in "/share/aclocal")
-                                (string-append out "/share/aclocal"))
-                       #t))))
-      (native-inputs `(("pkg-config" ,%pkg-config)))
-
-      ;; Ignore native inputs, and set `PKG_CONFIG_PATH' for target inputs.
-      (native-search-paths '())
-      (search-paths (package-native-search-paths %pkg-config)))))
-
-(define (pkg-config-for-target target)
-  "Return a pkg-config package for TARGET, which may be either #f for a native
-build, or a GNU triplet."
-  (if target
-      (cross-pkg-config target)
-      %pkg-config))
-
-;; This hack allows us to automatically choose the native or the cross
-;; `pkg-config' depending on whether it's being used in a cross-build
-;; environment or not.
-(define-syntax pkg-config
-  (identifier-syntax (pkg-config-for-target (%current-target-system))))
-
-;; This hack allows for using both "pkg-config" and "TARGET-pkg-config"
-;; at the same time.  Simply using '%pkg-config' and 'pkg-config' won't
-;; work because they both use the "PKG_CONFIG_PATH" environment variable.
-(define-public pkg-config-for-build
-  (package
-    (inherit (hidden-package %pkg-config))
-    (name "pkg-config-for-build")
-    (version "0")
-    (source #f)
-    (build-system trivial-build-system)
-    (inputs
-     (list bash-minimal %pkg-config))
-    (arguments
-     `(#:modules ((guix build utils))
-       #:builder
-       ,#~(begin
-            (use-modules (guix build utils))
-            (define where (string-append #$output "/bin/pkg-config"))
-            (mkdir-p (dirname where))
-            (call-with-output-file where
-              (lambda (port)
-                (format port "#!~a
-export PKG_CONFIG_PATH=\"$PKG_CONFIG_PATH_FOR_BUILD\"
-exec ~a \"$@\""
-                        (search-input-file %build-inputs "bin/bash")
-                        (search-input-file %build-inputs "bin/pkg-config"))))
-            (chmod where #o500))))
-    (native-search-paths
-     (map (lambda (original)
-            (search-path-specification
-             (inherit original)
-             (variable "PKG_CONFIG_PATH_FOR_BUILD")))
-          (package-native-search-paths %pkg-config)))))
-
-(define-public pkgconf
+(define-public %pkgconf
   (package
     (name "pkgconf")
     (version "2.1.0")
@@ -200,8 +119,8 @@ such as compilers and IDEs to discover and use libraries configured by
 pkgconf.")
     (license isc)))
 
-(define-public pkgconf-as-pkg-config
-  (package/inherit pkgconf
+(define-public %pkgconf-as-pkg-config
+  (package/inherit %pkgconf
     (name "pkgconf-as-pkg-config")
     (build-system gnu-build-system)
     (arguments
@@ -225,5 +144,132 @@ pkgconf.")
                                         "/share/aclocal")
                          (string-append #$output "/share/aclocal"))))))))
     (native-inputs '())
-    (inputs (list pkgconf))
+    (inputs (list %pkgconf))
     (propagated-inputs '())))
+
+
+;;;
+;;; Tooling for generating pkg-config wrappers for cross-compiling.
+;;;
+
+(define (make-cross-pkg-config pkg-config)
+  (mlambda (target)
+    "Return a procedure that evaluates to a PKG-CONFIG package for TARGET,
+essentially just a wrapper called `TARGET-pkg-config', as `configure' scripts
+like it."
+    ;; See <http://www.flameeyes.eu/autotools-mythbuster/pkgconfig/cross-compiling.html>
+    ;; for details.
+    (package
+      (inherit pkg-config)
+      (name (string-append (package-name pkg-config) "-" target))
+      (build-system trivial-build-system)
+      (arguments
+       (list
+        #:builder (with-imported-modules '((guix build utils))
+                    #~(begin
+                        (use-modules (guix build utils))
+
+                        (let* ((in     #+pkg-config)
+                               (out    #$output)
+                               (bin    (string-append out "/bin"))
+                               (prog   (string-append #$target "-pkg-config"))
+                               (native (string-append in "/bin/pkg-config")))
+
+                          (mkdir-p bin)
+
+                          ;; Create a `TARGET-pkg-config' -> `pkg-config' symlink.
+                          ;; This satisfies the pkg.m4 macros, which use
+                          ;; AC_PROG_TOOL to determine the `pkg-config' program
+                          ;; name.
+                          (symlink native (string-append bin "/" prog))
+
+                          ;; Also make 'pkg.m4' available, some packages might
+                          ;; expect it.
+                          (mkdir-p (string-append out "/share"))
+                          (symlink (string-append in "/share/aclocal")
+                                   (string-append out "/share/aclocal")))))))
+
+      ;; Ignore native inputs, and set `PKG_CONFIG_PATH' for target inputs.
+      (native-search-paths '())
+      (search-paths (package-native-search-paths pkg-config)))))
+
+(define (make-pkg-config-for-target pkg-config)
+  "Return a procedure that evaluates to a `pkg-config' package for TARGET
+built from PKG-CONFIG.  The target may be either #f for a native build, or a
+GNU triplet."
+  (let ((cross-pkg-config (make-cross-pkg-config pkg-config)))
+    (lambda (target)
+      (if target
+          (cross-pkg-config target)
+          pkg-config))))
+
+(define pkg-config-for-target
+  (make-pkg-config-for-target %pkg-config))
+
+(define pkgconf-for-target
+  (make-pkg-config-for-target %pkgconf))
+
+(define pkgconf-as-pkg-config-for-target
+  (make-pkg-config-for-target %pkgconf-as-pkg-config))
+
+
+;;;
+;;; The final pkg-config package variables to use.
+;;;
+
+;; These are a hacks for automatically choosing the native or the cross
+;; `pkg-config' depending on whether it's being used in a cross-build
+;; environment or not.
+(define-syntax pkg-config
+  (identifier-syntax (pkg-config-for-target (%current-target-system))))
+
+(define-syntax pkgconf
+  (identifier-syntax (pkgconf-for-target (%current-target-system))))
+
+(define-syntax pkgconf-as-pkg-config
+  (identifier-syntax (pkgconf-as-pkg-config-for-target
+                      (%current-target-system))))
+
+
+;;;
+;;; pkg-config packages for native use (build-time only).
+;;;
+(define (make-pkg-config-for-build pkg-config)
+  "Return a `pkg-config' package from PKG-CONFIG for use by the builder when
+cross-compiling, that honors a PKG_CONFIG_PATH_FOR_BUILD search path instead
+of PKG_CONFIG_PATH, to avoid conflicting with the target `pkg-config'."
+  (package
+    (inherit (hidden-package pkg-config))
+    (name "pkg-config-for-build")
+    (version "0")
+    (source #f)
+    (build-system trivial-build-system)
+    (inputs (list bash-minimal pkg-config))
+    (arguments
+     (list
+      #:modules '((guix build utils))
+      #:builder
+      #~(begin
+          (use-modules (guix build utils))
+          (define where (string-append #$output "/bin/pkg-config"))
+          (mkdir-p (dirname where))
+          (call-with-output-file where
+            (lambda (port)
+              (format port "#!~a
+export PKG_CONFIG_PATH=\"$PKG_CONFIG_PATH_FOR_BUILD\"
+exec ~a \"$@\""
+                      (search-input-file %build-inputs "bin/bash")
+                      (search-input-file %build-inputs "bin/pkg-config"))))
+          (chmod where #o500))))
+    (native-search-paths
+     (map (lambda (original)
+            (search-path-specification
+             (inherit original)
+             (variable "PKG_CONFIG_PATH_FOR_BUILD")))
+          (package-native-search-paths pkg-config)))))
+
+(define-public pkg-config-for-build
+  (make-pkg-config-for-build %pkg-config))
+
+(define-public pkgconf-as-pkg-config-for-build
+  (make-pkg-config-for-build %pkgconf-as-pkg-config))
