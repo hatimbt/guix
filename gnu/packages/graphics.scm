@@ -405,7 +405,16 @@ objects!")
                    ;; or IMAGEMAGICK_; fix that.
                    (substitute* "autotrace.pc.in"
                      (("@MAGICK_(LIBS|CFLAGS)@" _ var)
-                      (string-append "@IMAGEMAGICK_" var "@"))))))))
+                      (string-append "@IMAGEMAGICK_" var "@")))))
+               (add-after 'install 'remove-libtool-archives
+                 ;; Libtool archives lists the whole transitive dependencies,
+                 ;; which is unnecessary unless producing static archives and
+                 ;; leads to overlinking, e.g. causing the build of inkscape
+                 ;; to fail due to looking for a transitive pstoedit library.
+                 (lambda _
+                   (for-each delete-file
+                             (find-files (string-append #$output "/lib")
+                                         "\\.la$")))))))
     (native-inputs
      (list which
            autoconf
