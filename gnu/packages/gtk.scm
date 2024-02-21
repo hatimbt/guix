@@ -2129,11 +2129,12 @@ and routines to assist in editing internationalized text.")
        (file-name (git-file-name name version))
        (sha256
         (base32 "0k93pi0lkf941vanvh1habm6n5wl1n63726j5kqxh34wdlv4mv4s"))))
-    (native-inputs `(("pkg-config" ,pkg-config)
-                     ("check" ,check)
-                     ("gettext" ,gettext-minimal)
-                     ("glib:bin" ,glib "bin")
-                     ("xorg-server" ,xorg-server-for-tests)))
+    (native-inputs
+     (list pkg-config
+           check
+           gettext-minimal
+           `(,glib "bin")
+           xorg-server-for-tests))
     ;; Listed in 'Requires.private' of 'girara.pc'.
     (propagated-inputs (list gtk+))
     (arguments
