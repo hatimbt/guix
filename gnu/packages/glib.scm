@@ -9,7 +9,7 @@
 ;;; Copyright © 2017 Petter <petter@mykolab.ch>
 ;;; Copyright © 2018, 2019 Tobias Geerinckx-Rice <me@tobias.gr>
 ;;; Copyright © 2018 Alex Vong <alexvong1995@gmail.com>
-;;; Copyright © 2019, 2021, 2022, 2023 Maxim Cournoyer <maxim.cournoyer@gmail.com>
+;;; Copyright © 2019, 2021, 2022, 2023, 2024 Maxim Cournoyer <maxim.cournoyer@gmail.com>
 ;;; Copyright © 2019 Giacomo Leidi <goodoldpaul@autistici.org>
 ;;; Copyright © 2019, 2020, 2021 Marius Bakke <marius@gnu.org>
 ;;; Copyright © 2020 Nicolò Balzarotti <nicolo@nixo.xyz>
@@ -1097,8 +1097,7 @@ useful for C++.")
            (with-directory-excursion "tests"
              ;; FIXME: These tests require Gdk and/or Gtk 4.
              (for-each delete-file
-                       '("test_atoms.py" "test_overrides_gtk.py"))
-             #t)))))
+                       '("test_atoms.py" "test_overrides_gtk.py")))))))
     (build-system meson-build-system)
     (arguments
      `(#:phases
@@ -1109,10 +1108,10 @@ useful for C++.")
                ;; The default 90 seconds can be too low on slower machines.
                (invoke "meson" "test" "--timeout-multiplier" "5")))))))
     (native-inputs
-     `(("glib-bin" ,glib "bin")
-       ("pkg-config" ,pkg-config)
-       ("python-pytest" ,python-pytest)
-       ("python-wrapper" ,python-wrapper))) ; For patching shebangs
+     (list `(,glib "bin")
+           pkg-config
+           python-pytest
+           python-wrapper))             ;for tests
     (inputs
      (list python python-pycairo gobject-introspection))
     (propagated-inputs
