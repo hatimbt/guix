@@ -34,7 +34,7 @@
 ;;; Copyright © 2018 Vasile Dumitrascu <va511e@yahoo.com>
 ;;; Copyright © 2019 Tim Gesthuizen <tim.gesthuizen@yahoo.de>
 ;;; Copyright © 2019 mikadoZero <mikadozero@yandex.com>
-;;; Copyright © 2019, 2020, 2021, 2022, 2023 Maxim Cournoyer <maxim.cournoyer@gmail.com>
+;;; Copyright © 2019, 2020, 2021, 2022, 2023, 2024 Maxim Cournoyer <maxim.cournoyer@gmail.com>
 ;;; Copyright © 2019 Stefan Stefanović <stefanx2ovic@gmail.com>
 ;;; Copyright © 2019-2022 Brice Waegeneire <brice@waegenei.re>
 ;;; Copyright © 2019 Kei Kebreau <kkebreau@posteo.net>
@@ -5792,6 +5792,13 @@ Linux Device Mapper multipathing driver:
            #:test-target "partcheck"    ; need root for a full 'check'
            #:phases
            #~(modify-phases %standard-phases
+               (add-after 'unpack 'disable-problematic-tests
+                 (lambda _
+                   (with-directory-excursion "harness/cases"
+                     ;; The 21.t test fails with "Expected 4096, got
+                     ;; 18446744073709551605" (see:
+                     ;; https://pagure.io/libaio/issue/26).
+                     (rename-file "21.t" "21.t.disabled"))))
                (delete 'configure)      ; no configure script
                #$@(if (target-riscv64?)
                     #~((add-after 'unpack 'patch-test
