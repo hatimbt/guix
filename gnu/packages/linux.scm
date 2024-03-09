@@ -4329,6 +4329,31 @@ to the in-kernel OOM killer.")
               (substitute* "man/make.sh"
                 (("/usr/bin/xsltproc")
                  (search-input-file (or native-inputs inputs) "/bin/xsltproc")))))
+          (add-before 'bootstrap 'install-in-lib
+            (lambda _
+              ;; When the udev-service-type instantiates /etc, it collects
+              ;; hardware files from the <package>/lib/udev/hwdb.d directories
+              ;; of different packages.  Since we set sysconfdir to /etc, the
+              ;; only package-dependent location we can install hwdb files is
+              ;; in <package>/lib/udev/hwdb.d.  Eudev is configured to install
+              ;; these files in sysconfdir, but they should be placed into
+              ;; udevlibexecdir.
+              (copy-file "hwdb/Makefile.am" "hwdb/files.am")
+              (call-with-output-file "hwdb/Makefile.am"
+                (lambda (port)
+                  (format port "hardwarelibdir = $(udevlibexecdir)/hwdb.d\n")
+                  (format port "include ./files.am")))
+              (substitute* "hwdb/files.am"
+                (("dist_udevhwdb_DATA =")
+                 "dist_hardwarelib_DATA ="))
+              ;; Do not install the empty udev.conf template.
+              (substitute* "src/udev/Makefile.am"
+                (("dist_udevconf_DATA =")
+                 "dist_noinst_DATA ="))
+              ;; Do not ensure that /etc/udev/rules.d exists.
+              (substitute* "rules/Makefile.am"
+                (("\\$\\(MKDIR_P\\) \\$\\(DESTDIR\\)\\$\\(udevconfdir\\)/rules\\.d")
+                 "true"))))
           (add-after 'install 'move-static-library
             (lambda _
               (let ((source (string-append #$output "/lib/libudev.a"))
@@ -4340,19 +4365,17 @@ to the in-kernel OOM killer.")
                 ;; such that Libtool looks for it in the usual places.
                 (substitute* (string-append #$output "/lib/libudev.la")
                   (("old_library=.*")
-                   "old_library=''\n")))))
-          (add-after 'install 'build-hwdb
-            (lambda _
-              ;; Build OUT/etc/udev/hwdb.bin.  This allows 'lsusb' and
-              ;; similar tools to display product names.
-              ;;
-              ;; XXX: This can't be done when cross-compiling. Find another way
-              ;; to generate hwdb.bin for cross-built systems.
-              #$@(if (%current-target-system)
-                     #~(#t)
-                     #~((invoke (string-append #$output "/bin/udevadm")
-                                "hwdb" "--update" "--root" #$output))))))
-       #:configure-flags #~(list "--enable-manpages")))
+                   "old_library=''\n"))))))
+      #:configure-flags
+      #~(list "--enable-manpages"
+              ;; By default, autoconf uses $prefix/etc. The udev-service-type
+              ;; makes sure /etc is set up with rules and hardware file
+              ;; descriptions.
+              "--sysconfdir=/etc")))
+    (native-search-paths
+      (list (search-path-specification
+              (variable "UDEV_HWDB_PATH")
+              (files '("lib/udev/hwdb.d")))))
     (native-inputs
      (list autoconf
            automake
