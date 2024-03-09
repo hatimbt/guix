@@ -8,15 +8,18 @@
 ;;; Copyright © 2021 Collin J. Doering <collin@rekahsoft.ca>
 ;;; Copyright © 2021 LibreMiami <packaging-guix@libremiami.org>
 ;;; Copyright © 2021 Raghav Gururajan <rg@raghavgururajan.name>
+;;; Copyright © 2021 Sarah Morgensen <iskarian@mgsn.dev>
 ;;; Copyright © 2021 Vagrant Cascadian <vagrant@debian.org>
 ;;; Copyright © 2022 (unmatched-parenthesis <paren@disroot.org>
 ;;; Copyright © 2022 Efraim Flashner <efraim@flashner.co.il>
 ;;; Copyright © 2022 Tobias Geerinckx-Rice <me@tobias.gr>
 ;;; Copyright © 2022, 2023 Nicolas Graves <ngraves@ngraves.fr>
 ;;; Copyright © 2023 Artyom V. Poptsov <poptsov.artyom@gmail.com>
+;;; Copyright © 2023 Benjamin <benjamin@uvy.fr>
 ;;; Copyright © 2023 Clément Lassieur <clement@lassieur.org>
 ;;; Copyright © 2023 Felix Lechner <felix.lechner@lease-up.com>
 ;;; Copyright © 2023 Jack Hill <jackhill@jackhill.us>
+;;; Copyright © 2024 Troy Figiel <troy@troyfigiel.com>
 ;;;
 ;;; This file is part of GNU Guix.
 ;;;
@@ -42,7 +45,9 @@
   #:use-module (guix utils)
   #:use-module (gnu packages)
   #:use-module (gnu packages golang)
-  #:use-module (gnu packages golang-check))
+  #:use-module (gnu packages golang-build)
+  #:use-module (gnu packages golang-check)
+  #:use-module (gnu packages golang-compression))
 
 ;;; Commentary:
 ;;;
@@ -82,6 +87,24 @@
 It features small explicit keys, no configuration options, and Unix-style
 composability.")
     (license license:bsd-3)))
+
+(define-public age
+  (package
+    (inherit go-filippo-io-age)
+    (name "age")
+    (arguments
+     `(#:import-path "filippo.io/age/cmd/age"
+       #:unpack-path "filippo.io/age"
+       #:install-source? #f))))
+
+(define-public age-keygen
+  (package
+    (inherit go-filippo-io-age)
+    (name "age-keygen")
+    (arguments
+     `(#:import-path "filippo.io/age/cmd/age-keygen"
+       #:unpack-path "filippo.io/age"
+       #:install-source? #f))))
 
 (define-public go-filippo-io-edwards25519
   (package
@@ -250,7 +273,9 @@ needing to use secp256k1 elliptic curve cryptography.")
              (commit (string-append "v" version))))
        (file-name (git-file-name name version))
        (sha256
-        (base32 "1f3wyr9msnnz94szrkmnfps9wm40s5sp9i4ak0kl92zcrkmpy29a"))))
+        (base32 "1f3wyr9msnnz94szrkmnfps9wm40s5sp9i4ak0kl92zcrkmpy29a"))
+       (modules '((guix build utils)))
+       (snippet '(delete-file-recursively "xxhashbench"))))
     (build-system go-build-system)
     (arguments
      (list
@@ -401,6 +426,52 @@ zero round-trip encryption, and other advanced features.")
 providing bidirectional mapping values to their names, plus enum convenience
 for values.")
     (license license:bsd-3)))
+
+(define-public go-github-com-golang-jwt-jwt-v4
+  (package
+    (name "go-github-com-golang-jwt-jwt-v4")
+    (version "4.5.0")
+    (source
+     (origin
+       (method git-fetch)
+       (uri (git-reference
+             (url "https://github.com/golang-jwt/jwt")
+             (commit (string-append "v" version))))
+       (file-name (git-file-name name version))
+       (sha256
+        (base32 "1m7c9lwlmd0lnn0hyby1rb3f4nwn4xcjgca218frj0hi0krqn8kp"))))
+    (build-system go-build-system)
+    (arguments
+     (list
+      #:import-path "github.com/golang-jwt/jwt/v4"))
+    (home-page "https://github.com/golang-jwt/jwt")
+    (synopsis "Go implementation of JSON Web Tokens")
+    (description
+     "This package provides a Go implementation of
+@url{https://datatracker.ietf.org/doc/html/rfc7519, JSON Web Tokens} and
+supports the parsing and verification as well as the generation and signing of
+JSON Web Tokens.  The currently supported signing algorithms are HMAC SHA,
+RSA, RSA-PSS, and ECDSA, though hooks are present for adding your own.")
+    (license license:expat)))
+
+(define-public go-github-com-golang-jwt-jwt-v5
+  (package
+    (inherit go-github-com-golang-jwt-jwt-v4)
+    (name "go-github-com-golang-jwt-jwt-v5")
+    (version "5.2.0")
+    (source
+     (origin
+       (method git-fetch)
+       (uri (git-reference
+             (url "https://github.com/golang-jwt/jwt")
+             (commit (string-append "v" version))))
+       (file-name (git-file-name name version))
+       (sha256
+        (base32 "0px12zhdmzqjj5zlcr136rcsilpmi4chiz6arxv49q372j4nhmia"))))
+    (arguments
+     (list
+      #:go go-1.18
+      #:import-path "github.com/golang-jwt/jwt/v5"))))
 
 (define-public go-github-com-gxed-hashland-keccakpg
   (let ((commit "d9f6b97f8db22dd1e090fd0bbbe98f09cc7dd0a8")
@@ -561,6 +632,55 @@ library's internal ChaCha20 package.")
 the Go standard library's TLS 1.3 implementation.")
     (license license:bsd-3)))
 
+(define-public go-github-com-nats-io-jwt-v2
+  (package
+    (name "go-github-com-nats-io-jwt-v2")
+    (version "2.5.3")
+    (source
+     (origin
+       (method git-fetch)
+       (uri (git-reference
+             (url "https://github.com/nats-io/jwt")
+             (commit (string-append "v" version))))
+       (file-name (git-file-name name version))
+       (sha256
+        (base32 "0wcqbfyd3b4qdspmf72cpsbi0y2a4b1qd0cv3qvhh17d1h1a6zib"))))
+    (build-system go-build-system)
+    (arguments
+     (list #:import-path "github.com/nats-io/jwt/v2"
+           #:unpack-path "github.com/nats-io/jwt"))
+    (propagated-inputs (list go-github-com-nats-io-nkeys))
+    (home-page "https://github.com/nats-io/jwt")
+    (synopsis "Go library signing JWT tokens with NKeys for the NATS ecosystem")
+    (description
+     "This library is a JWT implementation that uses nkeys to digitally sign
+JWT tokens.  Nkeys use Ed25519 to provide authentication of JWT claims.")
+    (license license:asl2.0)))
+
+(define-public go-github-com-nats-io-nkeys
+  (package
+    (name "go-github-com-nats-io-nkeys")
+    (version "0.4.7")
+    (source
+     (origin
+       (method git-fetch)
+       (uri (git-reference
+             (url "https://github.com/nats-io/nkeys")
+             (commit (string-append "v" version))))
+       (file-name (git-file-name name version))
+       (sha256
+        (base32 "0779m4nn6n0ql23wnk50ybddslvb84mwx036gf7yw6ckmm4yybxs"))))
+    (build-system go-build-system)
+    (arguments
+     '(#:import-path "github.com/nats-io/nkeys"))
+    (propagated-inputs (list go-golang-org-x-crypto))
+    (home-page "https://github.com/nats-io/nkeys")
+    (synopsis "Go library implementing public-key system for NATS ecosystem")
+    (description
+     "This package is an Ed25519 based public-key signature system that
+simplifies keys and seeds and performs signing and verification.")
+    (license license:asl2.0)))
+
 (define-public go-github-com-minio-blake2b-simd
   (let ((commit "3f5f724cb5b182a5c278d6d3d55b40e7f8c2efb4")
         (revision "0"))
@@ -591,6 +711,31 @@ In addition to AVX there is also support for AVX2 as well as SSE.  Best
 performance is obtained with AVX2 which gives roughly a 4X performance
 increase approaching hashing speeds of 1GB/sec on a single core.")
       (license license:asl2.0))))
+
+(define-public go-github-com-minio-highwayhash
+  (package
+    (name "go-github-com-minio-highwayhash")
+    (version "1.0.2")
+    (source
+     (origin
+       (method git-fetch)
+       (uri (git-reference
+             (url "https://github.com/minio/highwayhash")
+             (commit (string-append "v" version))))
+       (file-name (git-file-name name version))
+       (sha256
+        (base32 "1inrix7720273ccynxcyi7xsgc55cskxrw7gwn08qkmdj9xdxqai"))))
+    (build-system go-build-system)
+    (arguments
+     '(#:import-path "github.com/minio/highwayhash"))
+    (propagated-inputs (list go-golang-org-x-sys))
+    (home-page "https://github.com/minio/highwayhash")
+    (synopsis "HighwayHash library for Go")
+    (description
+     "This package implements the pseudo-random-function (PRF) HighwayHash.
+HighwayHash is a fast hash function designed to defend hash-flooding attacks
+or to authenticate short-lived messages.")
+    (license license:asl2.0)))
 
 (define-public go-github-com-minio-sha256-simd
   (package
@@ -680,6 +825,8 @@ Architecture Processors\" by J. Guilford et al.")
                (delete-file-recursively
                 (string-append "src/" import-path "/testdata"))
                #t)))))
+      (native-inputs
+       (list go-golang-org-x-crypto))
       (home-page "https://github.com/OperatorFoundation/ed25519")
       (synopsis "Ed25519 for go")
       (description "Package ed25519 implements the Ed25519 signature
@@ -970,6 +1117,29 @@ function.  In addition to the pure-Go implementation, this package also
 contains AVX-512 and AVX2 routines (generated by avo) that greatly increase
 performance for large inputs and outputs.")
     (license license:expat)))
+
+(define-public go-torproject-org-pluggable-transports-goptlib
+  (package
+    (name "go-torproject-org-pluggable-transports-goptlib")
+    (version "1.1.0")
+    (source
+     (origin
+       (method git-fetch)
+       (uri
+        (git-reference
+         (url "https://git.torproject.org/pluggable-transports/goptlib")
+         (commit (string-append "v" version))))
+       (file-name (git-file-name name version))
+       (sha256
+        (base32 "1lh938194hvkf8pqgnxwf6hvjv9rv0j3kasi07r2ckrj8sxzk4jc"))))
+    (build-system go-build-system)
+    (arguments
+     `(#:import-path "git.torproject.org/pluggable-transports/goptlib.git"))
+    (home-page "https://gitweb.torproject.org/pluggable-transports/goptlib.git/")
+    (synopsis "Go pluggable transports library")
+    (description "GoPtLib is a library for writing Tor pluggable transports in
+Go.")
+    (license license:cc0)))
 
 ;;;
 ;;; Avoid adding new packages to the end of this file. To reduce the chances

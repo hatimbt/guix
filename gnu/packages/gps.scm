@@ -7,6 +7,7 @@
 ;;; Copyright © 2020 Vincent Legoll <vincent.legoll@gmail.com>
 ;;; Copyright © 2020 Marius Bakke <marius@gnu.org>
 ;;; Copyright © 2021 Björn Höfling <bjoern.hoefling@bjoernhoefling.de>
+;;; Copyright © 2024 Andy Tai <atai@atai.org>
 ;;;
 ;;; This file is part of GNU Guix.
 ;;;
@@ -48,6 +49,7 @@
   #:use-module (gnu packages python)
   #:use-module (gnu packages python-xyz)
   #:use-module (gnu packages qt)
+  #:use-module (gnu packages serialization)
   #:use-module (gnu packages sqlite)
   #:use-module (gnu packages xml))
 
@@ -140,7 +142,7 @@ between two other data points.")
 (define-public gama
   (package
     (name "gama")
-    (version "2.27")
+    (version "2.29")
     (source
       (origin
         (method url-fetch)
@@ -148,7 +150,7 @@ between two other data points.")
                             version ".tar.gz"))
         (sha256
          (base32
-          "0h9kwgzz9ijzx6jcpc37qhadc41k1jdcv0s2wcpsz6zjmx63p2wk"))
+          "04dlh1pdaiq059ssrxa4yn24iqgjrzy2mq7s9n1pgrzlzz3a63y0"))
         (modules '((guix build utils)))
         (snippet
          '(begin
@@ -157,7 +159,7 @@ between two other data points.")
     (build-system gnu-build-system)
     (arguments '(#:parallel-tests? #f)) ; race condition
     (native-inputs
-     (list libxml2))
+     (list libxml2 yaml-cpp))
     (inputs
      (list expat sqlite))
     (home-page "https://www.gnu.org/software/gama/")

@@ -90,7 +90,7 @@
   (map (lambda (input)
          (case (%input-style)
            ((specification)
-            `(specification->package ,(upstream-input-name input)))
+            `(specification->package ,(upstream-input-downstream-name input)))
            (else
             ((compose string->symbol
                        upstream-input-downstream-name)
@@ -418,6 +418,7 @@ empty list when the FIELD cannot be found."
         "none"
         "rtools"
         "unix"
+        "use_c17"
         "windows"
         "xcode"
         "xquartz"))

@@ -42,6 +42,7 @@
 ;;; Copyright © 2023 Gabriel Hondet <gabriel.hondet@cominety.net>
 ;;; Copyright © 2023 Raven Hallsby <karl@hallsby.com>
 ;;; Copyright © 2024 Michal Atlas <michal_atlas+git@posteo.net>
+;;; Copyright © 2024 Carlo Zancanaro <carlo@zancanaro.id.au>
 ;;;
 ;;; This file is part of GNU Guix.
 ;;;
@@ -1073,7 +1074,7 @@ options, e.g., by looking up an external key/value store
 (define-public sbcl-command-line-args
   (package
     (name "sbcl-command-line-args")
-    (version "0.1.0")
+    (version "0.1.1")
     (source
      (origin
        (method git-fetch)
@@ -1082,7 +1083,7 @@ options, e.g., by looking up an external key/value store
              (commit (string-append "v" version))))
        (file-name (git-file-name "cl-command-line-args" version))
        (sha256
-        (base32 "0ncw32qaak878xg68p42m2sh0qv19hg1va9wrh74d92v7cqz08kw"))))
+        (base32 "140xnz2v0v3hfg3dp2fhidw8ns6lxd3a5knm07wqdp48ksg119wy"))))
     (build-system asdf-build-system/sbcl)
     (arguments
      '(#:asd-systems '("whereiseveryone.command-line-args")))
@@ -3486,7 +3487,7 @@ also be supported.")
 (define-public sbcl-ironclad
   (package
     (name "sbcl-ironclad")
-    (version "0.59")
+    (version "0.60")
     (source
      (origin
        (method git-fetch)
@@ -3494,7 +3495,7 @@ also be supported.")
              (url "https://github.com/sharplispers/ironclad/")
              (commit (string-append "v" version))))
        (sha256
-        (base32 "02abwy59v9hfdl2ya4h6l2hc1xrnvqlxzg9vlk87wmi92azpa8v9"))
+        (base32 "122ldxiddkscb3li5wjrppr7vyn77znyjfgs8pbflrskzyxlabdd"))
        (file-name (git-file-name "cl-ironclad" version))))
     (build-system asdf-build-system/sbcl)
     (native-inputs
@@ -11551,6 +11552,42 @@ may contain sets, maps may be keyed by sets, etc.")
      ;; Tests fails on ECL with "The function FSET::MAKE-CHAR is undefined".
      '(#:tests? #f))))
 
+(define-public sbcl-modf
+  (let ((commit "dea93fe62c6bf7f66f32f52ac0c555aedbf7abad")
+        (revision "0"))
+    (package
+      (name "sbcl-modf")
+      (version (git-version "0" revision commit))
+      (source
+       (origin
+         (method git-fetch)
+         (uri (git-reference
+               (url "https://github.com/smithzvk/modf")
+               (commit commit)))
+         (file-name (git-file-name "cl-modf" version))
+         (sha256
+          (base32
+           "1aap7ldy7lv942khp026pgndgdzfkkqa9xcq1ykinrmflrgdazay"))))
+      (build-system asdf-build-system/sbcl)
+      (inputs
+       (list sbcl-alexandria
+             sbcl-closer-mop
+             sbcl-iterate))
+      (native-inputs
+       (list sbcl-stefil))
+      (home-page "https://github.com/smithzvk/modf")
+      (synopsis "SETF like macro for functional programming in Common Lisp")
+      (description "This library simplifies functional programming in Common
+Lisp by making it easier to make new data structures with specified changes in
+place.")
+      (license license:bsd-3))))
+
+(define-public cl-modf
+  (sbcl-package->cl-source-package sbcl-modf))
+
+(define-public ecl-modf
+  (sbcl-package->ecl-package sbcl-modf))
+
 (define-public sbcl-cl-cont
   (let ((commit "fc1fa7e6eb64894fdca13e688e6015fad5290d2a")
         (revision "1"))
@@ -15445,71 +15482,71 @@ functions.")
   (sbcl-package->ecl-package sbcl-cl-dejavu))
 
 (define-public sbcl-mcclim
-  (let ((commit "ece91cf035e2ccb1c6eb0bb867ae2bc45f627982")
-        (revision "3"))
-    (package
-      (name "sbcl-mcclim")
-      (version (git-version "0.9.7" revision commit))
-      (source
-       (origin
-         (method git-fetch)
-         (uri (git-reference
-               (url "https://codeberg.org/McCLIM/McCLIM")
-               (commit commit)))
-         (file-name (git-file-name "cl-mcclim" version))
-         (sha256
-          (base32 "0prn4f0nz604ykcg8004f1vndgjm7181wrlblq6mhasphca28c2k"))))
-      (build-system asdf-build-system/sbcl)
-      (native-inputs
-       (list sbcl-fiveam pkg-config))
-      (inputs
-       (list fontconfig
-             freetype
-             harfbuzz
-             sbcl-alexandria
-             sbcl-babel
-             sbcl-bordeaux-threads
-             sbcl-cffi
-             sbcl-cl-base64
-             sbcl-cl-dejavu
-             sbcl-cl-freetype2
-             sbcl-cl-pdf
-             sbcl-cl-unicode
-             sbcl-cl-vectors
-             sbcl-cl-who
-             sbcl-closer-mop
-             sbcl-clx
-             sbcl-flexi-streams
-             sbcl-flexichain
-             sbcl-log4cl
-             sbcl-opticl
-             sbcl-slime-swank
-             sbcl-spatial-trees
-             sbcl-trivial-features
-             sbcl-trivial-garbage
-             sbcl-trivial-gray-streams
-             sbcl-zpb-ttf))
-      (arguments
-       '(#:asd-systems '("mcclim"
-                         "clim-examples"
-                         ;; clim-debugger is required by cleavir.
-                         "clim-debugger")
-         #:phases
-         (modify-phases %standard-phases
-           (add-after 'unpack 'fix-paths
-             (lambda* (#:key inputs #:allow-other-keys)
-               (substitute* "Extensions/fontconfig/src/functions.lisp"
-                 (("libfontconfig\\.so")
-                  (search-input-file inputs "/lib/libfontconfig.so")))
-               (substitute* "Extensions/harfbuzz/src/functions.lisp"
-                 (("libharfbuzz\\.so")
-                  (search-input-file inputs "/lib/libharfbuzz.so"))))))))
-      (home-page "https://mcclim.common-lisp.dev/")
-      (synopsis "Common Lisp GUI toolkit")
-      (description
-       "McCLIM is an implementation of the @emph{Common Lisp Interface Manager
+  (package
+    (name "sbcl-mcclim")
+    (version "0.9.8")
+    (source
+     (origin
+       (method git-fetch)
+       (uri (git-reference
+             (url "https://codeberg.org/McCLIM/McCLIM")
+             (commit (string-append version "-yule"))))
+       (file-name (git-file-name "cl-mcclim" version))
+       (sha256
+        (base32 "0gbi61jnnsz6fvhv18mf57jkq46bvcd0355vqdcnrni7xyi10sk8"))))
+    (build-system asdf-build-system/sbcl)
+    (native-inputs
+     (list sbcl-fiveam pkg-config))
+    (inputs
+     (list fontconfig
+           freetype
+           harfbuzz
+           sbcl-alexandria
+           sbcl-babel
+           sbcl-bordeaux-threads
+           sbcl-cffi
+           sbcl-cl-base64
+           sbcl-cl-dejavu
+           sbcl-cl-freetype2
+           sbcl-cl-pdf
+           sbcl-cl-unicode
+           sbcl-cl-vectors
+           sbcl-cl-who
+           sbcl-closer-mop
+           sbcl-cluffer
+           sbcl-clx
+           sbcl-flexi-streams
+           sbcl-flexichain
+           sbcl-log4cl
+           sbcl-lorem-ipsum
+           sbcl-opticl
+           sbcl-slime-swank
+           sbcl-spatial-trees
+           sbcl-trivial-features
+           sbcl-trivial-garbage
+           sbcl-trivial-gray-streams
+           sbcl-zpb-ttf))
+    (arguments
+     '(#:asd-systems '("mcclim"
+                       "clim-examples"
+                       ;; clim-debugger is required by cleavir.
+                       "clim-debugger")
+       #:phases
+       (modify-phases %standard-phases
+         (add-after 'unpack 'fix-paths
+           (lambda* (#:key inputs #:allow-other-keys)
+             (substitute* "Extensions/fontconfig/src/functions.lisp"
+               (("libfontconfig\\.so")
+                (search-input-file inputs "/lib/libfontconfig.so")))
+             (substitute* "Extensions/harfbuzz/src/functions.lisp"
+               (("libharfbuzz\\.so")
+                (search-input-file inputs "/lib/libharfbuzz.so"))))))))
+    (home-page "https://mcclim.common-lisp.dev/")
+    (synopsis "Common Lisp GUI toolkit")
+    (description
+     "McCLIM is an implementation of the @emph{Common Lisp Interface Manager
 specification}, a toolkit for writing GUIs in Common Lisp.")
-      (license license:lgpl2.1+))))
+    (license license:lgpl2.1+)))
 
 (define-public cl-mcclim
   (sbcl-package->cl-source-package sbcl-mcclim))
@@ -21876,8 +21913,8 @@ Common Lisp.")
   (sbcl-package->cl-source-package sbcl-metacopy))
 
 (define-public sbcl-legit
-  (let ((commit "5f8a2d4c4f5fb8e53340eeef600433ee20e03fbe")
-        (revision "2"))
+  (let ((commit "9c677b9b798803d37ab6f5e0e0705441872f7230")
+        (revision "3"))
     (package
       (name "sbcl-legit")
       (version (git-version "1.0.0" revision commit))
@@ -21887,9 +21924,9 @@ Common Lisp.")
          (uri (git-reference
                (url "https://github.com/Shinmera/legit")
                (commit commit)))
-         (file-name (git-file-name name version))
+         (file-name (git-file-name "cl-legit" version))
          (sha256
-          (base32 "0crr7ya7dg15di7glk3w9sgf6j8dmny347gynmxxrdvjj9pa906m"))))
+          (base32 "0jy021ywrbnkgbgb63ip6j7kr40m4wz2pz1v5ybn6xkkn6dyprsz"))))
       (build-system asdf-build-system/sbcl)
       (arguments
        `(#:phases

@@ -157,6 +157,8 @@ respective documentation."
 
             (git-fetch-with-fallback (getenv "git url") (getenv "git commit")
                                      #$output
+                                     #:hash #$hash
+                                     #:hash-algorithm '#$hash-algo
                                      #:lfs? lfs?
                                      #:recursive? recursive?
                                      #:git-command "git")))))

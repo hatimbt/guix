@@ -38,7 +38,7 @@
 ;;; Copyright © 2021 Leo Le Bouter <lle-bout@zaclys.net>
 ;;; Copyright © 2021 Zelphir Kaltstahl <zelphirkaltstahl@posteo.de>
 ;;; Copyright © 2021 Oleg Pykhalov <go.wigust@gmail.com>
-;;; Copyright © 2021, 2022 Artyom V. Poptsov <poptsov.artyom@gmail.com>
+;;; Copyright © 2021, 2022, 2024 Artyom V. Poptsov <poptsov.artyom@gmail.com>
 ;;; Copyright © 2022 Maxime Devos <maximedevos@telenet.be>
 ;;; Copyright © 2022 Zhu Zihao <all_but_last@163.com>
 ;;; Copyright © 2022 Antero Mejr <antero@mailbox.org>
@@ -1853,7 +1853,7 @@ library}.")
 (define-public guile-yamlpp
   (package
     (name "guile-yamlpp")
-    (version "0.2")
+    (version "0.3")
     (source
      (origin
        (method git-fetch)
@@ -1862,7 +1862,7 @@ library}.")
              (commit version)))
        (file-name (git-file-name name version))
        (sha256
-        (base32 "14mlqi7hw7pi9scwk1g432issnqcn185pd8na2plijxq55cy0iq7"))))
+        (base32 "0ik69y0vddg0myp0zdbkmklma0qkkrqzwlqwkij1zirklz6hl1ss"))))
     (build-system gnu-build-system)
     (native-inputs (list autoconf automake libtool pkg-config))
     (inputs (list guile-3.0 yaml-cpp))
@@ -2175,7 +2175,7 @@ provides tight coupling to Guix.")
 (define-public guile-ics
   (package
     (name "guile-ics")
-    (version "0.5.0")
+    (version "0.6.0")
     (source
      (origin
        (method git-fetch)
@@ -2185,7 +2185,7 @@ provides tight coupling to Guix.")
        (file-name (string-append name "-" version "-checkout"))
        (sha256
         (base32
-         "1ipryn69ad4viqai9pnwhkqqpf9wgw0m2qxrwkfrpm1bfdyilw9w"))))
+         "1gkz19iz3ncf9ddr731lsaw12ca7ygj3dxziz54s9xpp5cw19r0v"))))
     (build-system gnu-build-system)
     (arguments
      (list #:phases #~(modify-phases %standard-phases
@@ -2196,8 +2196,12 @@ provides tight coupling to Guix.")
            texinfo
            gettext-minimal ;Gettext brings 'AC_LIB_LINKFLAGS_FROM_LIBS'.
            help2man
-           pkg-config))
-    (inputs (list guile-3.0 which))
+           pkg-config
+           ;; needed when cross-compiling.
+           guile-3.0
+           guile-lib
+           guile-smc))
+    (inputs (list guile-3.0))
     (propagated-inputs (list guile-lib guile-smc guile-dsv))
     (home-page "https://github.com/artyom-poptsov/guile-ics")
     (synopsis "Guile parser library for the iCalendar format")
@@ -2213,7 +2217,12 @@ The library is shipped with documentation in Info format and usage examples.")
   (package
     (inherit guile-ics)
     (name "guile2.2-ics")
-    (inputs (list guile-2.2 which))
+    (native-inputs
+     (modify-inputs (package-native-inputs guile-ics)
+       (replace "guile" guile-2.2)
+       (replace "guile-lib" guile2.2-lib)
+       (replace "guile-smc" guile2.2-smc)))
+    (inputs (list guile-2.2))
     (propagated-inputs (list guile2.2-lib guile2.2-dsv guile2.2-smc))))
 
 (define-public guile-imanifest
@@ -2886,7 +2895,7 @@ See http://minikanren.org/ for more on miniKanren generally.")
 (define-public guile-irregex
   (package
     (name "guile-irregex")
-    (version "0.9.6")
+    (version "0.9.11")
     (source (origin
               (method url-fetch)
               (uri (string-append
@@ -2894,25 +2903,46 @@ See http://minikanren.org/ for more on miniKanren generally.")
                     version ".tar.gz"))
               (sha256
                (base32
-                "1ia3m7dp3lcxa048q0gqbiwwsyvn99baw6xkhb4bhhzn4k7bwyqq"))))
+                "026kzl96pmwbjqdc7kh8rdh8ng813sjvdsik0dag5acza20sjm19"))))
     (build-system guile-build-system)
     (arguments
-     '(#:phases (modify-phases %standard-phases
-                  (add-after 'unpack 'move-files-around
-                    (lambda _
-                      ;; Move the relevant source files to src/ and create the
-                      ;; rx/ directory to match the expected module hierarchy.
-                      (mkdir-p "src/rx/source")
-                      (rename-file "irregex-guile.scm"
-                                   "src/rx/irregex.scm")
-                      (rename-file "irregex.scm"
-                                   "src/rx/source/irregex.scm")
-                      ;; Not really reachable via guile's packaging system,
-                      ;; but nice to have around.
-                      (rename-file "irregex-utils.scm"
-                                   "src/rx/source/irregex-utils.scm")
-                      #t)))
-       #:source-directory "src"))
+     (list
+      #:phases
+      #~(modify-phases %standard-phases
+          (add-after 'unpack 'move-files-around
+            (lambda _
+              ;; Copy the relevant source files to src/ and create the
+              ;; rx/ directory to match the expected module hierarchy.
+              (mkdir-p "src/rx/source")
+              (copy-file "irregex-guile.scm"
+                         "src/rx/irregex.scm")
+              (copy-file "irregex.scm"
+                         "src/rx/source/irregex.scm")
+
+              (mkdir-p "src/rx/irregex")
+              (copy-file "irregex-utils-guile.scm"
+                         "src/rx/irregex/utils.scm")
+              (copy-file "irregex-utils.scm"
+                         "src/rx/source/irregex-utils.scm")))
+          (add-after 'build 'check
+            (lambda _
+              (for-each (lambda (f)
+                          (invoke "guile" "--no-auto-compile" "-L" "." "-s" f))
+                        (find-files "tests" "^guile-.*\\.scm"))))
+          (add-after 'install 'check-installed
+            (lambda _
+              (define-values (scm go) (target-guile-scm+go #$output))
+              (for-each
+               (lambda (f)
+                 (substitute* f
+                   (("\\(load-from-path \"irregex\"\\)")
+                    "(use-modules (rx irregex))")
+                   (("\\(load-from-path \"irregex-utils\"\\)")
+                    "(use-modules (rx irregex utils))"))
+                 (invoke "guile" "-L" scm "-C" go "-L" "tests" f))
+               (delete "tests/guile-cset.scm" ; Tests non-exported API
+                       (find-files "tests" "^guile-.*\\.scm"))))))
+      #:source-directory "src"))
     (native-inputs
      (list guile-3.0))
     (home-page "https://synthcode.com/scheme/irregex")
@@ -2927,6 +2957,27 @@ inspired by the SCSH regular expression system.")
   (package
     (inherit guile-irregex)
     (name "guile2.0-irregex")
+    (arguments
+     (substitute-keyword-arguments (package-arguments guile-irregex)
+       ((#:phases phases)
+        #~(modify-phases #$phases
+            ;; For some reason guile 2.0 cannot load foo.scm using
+            ;; (load-from-path "foo").  So create symlinks to work around it.
+            (add-before 'check 'create-symlinks
+              (lambda _
+                (use-modules (ice-9 regex))
+                (for-each
+                 (lambda (f)
+                   (symlink (regexp-substitute #f (string-match "/([^/]+)$" f)
+                                               1 ".scm")
+                            f))
+                 '("tests/guile/test-support"
+                   "tests/test-cset"
+                   "tests/test-irregex"
+                   "tests/test-irregex-from-gauche"
+                   "tests/test-irregex-pcre"
+                   "tests/test-irregex-scsh"
+                   "tests/test-irregex-utf8"))))))))
     (native-inputs (list guile-2.0))))
 
 (define-public guile2.2-irregex
@@ -2938,14 +2989,14 @@ inspired by the SCSH regular expression system.")
 (define-public haunt
   (package
     (name "haunt")
-    (version "0.2.6")
+    (version "0.3.0")
     (source (origin
               (method url-fetch)
               (uri (string-append "https://files.dthompson.us/haunt/haunt-"
                                   version ".tar.gz"))
               (sha256
                (base32
-                "1nwhwngx0gl2892vrvrzrxy5w6a5l08j1w0522kdh9a3v11qpwmw"))))
+                "0awrk4a2gfnk660m4kg9cy1w8z7bj454355w7rn0cjp5dg8bxflq"))))
     (build-system gnu-build-system)
     (arguments
      `(#:modules ((ice-9 match) (ice-9 ftw)
@@ -4200,7 +4251,7 @@ debugging code.")
 (define-public guile-png
   (package
     (name "guile-png")
-    (version "0.7.1")
+    (version "0.7.2")
     (source (origin
               (method git-fetch)
               (uri (git-reference
@@ -4209,7 +4260,7 @@ debugging code.")
               (file-name (string-append name "-" version "-checkout"))
               (sha256
                (base32
-                "0y65795s9bs69msqvdbq8h34n00bkfs5v1d44wz21nwdffvq6557"))))
+                "1ad03r84j17rwfxbxqb0qmf70ggqs01kjyman3x1581lm5dk1757"))))
     (build-system gnu-build-system)
     (arguments
      (list

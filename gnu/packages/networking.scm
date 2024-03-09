@@ -62,6 +62,8 @@
 ;;; Copyright © 2023 Zheng Junjie <873216071@qq.com>
 ;;; Copyright © 2023 Artyom V. Poptsov <poptsov.artyom@gmail.com>
 ;;; Copyright © 2024 Tomas Volf <~@wolfsden.cz>
+;;; Copyright © 2022 Dominic Martinez <dom@dominicm.dev>
+;;; Copyright © 2024 Alexey Abramov <levenson@mmer.org>
 ;;;
 ;;; This file is part of GNU Guix.
 ;;;
@@ -125,7 +127,11 @@
   #:use-module (gnu packages gnome)
   #:use-module (gnu packages gnupg)
   #:use-module (gnu packages golang)
+  #:use-module (gnu packages golang-build)
+  #:use-module (gnu packages golang-check)
+  #:use-module (gnu packages golang-crypto)
   #:use-module (gnu packages golang-web)
+  #:use-module (gnu packages golang-xyz)
   #:use-module (gnu packages graphviz)
   #:use-module (gnu packages gstreamer)
   #:use-module (gnu packages gtk)
@@ -173,6 +179,7 @@
   #:use-module (gnu packages valgrind)
   #:use-module (gnu packages web)
   #:use-module (gnu packages wxwidgets)
+  #:use-module (gnu packages xiph)
   #:use-module (gnu packages xml)
   #:use-module (ice-9 match))
 
@@ -274,13 +281,12 @@ protocols.")
                 "1m29p4bsafzbchnkidyrnglfdf1c9pnq6akkmivi23qdv9kj51dg"))))
     (build-system gnu-build-system)
     (arguments
-     `(#:parallel-tests? #f
-       #:make-flags (let ((target ,(%current-target-system)))
-                      (list ,(string-append "CC="
-                                            (cc-for-target))
-                            (string-append "PREFIX="
-                                           (assoc-ref %outputs "out"))))
-       #:test-target "test"))
+     (list
+      #:parallel-tests? #f
+      #:make-flags
+      #~(list (string-append "CC=" #$(cc-for-target))
+              (string-append "PREFIX=" #$output))
+      #:test-target "test"))
     (home-page "https://librecast.net/lcrq.html")
     (synopsis "Librecast RaptorQ library")
     (description
@@ -345,13 +351,11 @@ Unix Domain Sockets, SCTP for both IPv4 and IPv6.")
         (base32 "1rhk80ybd2zranay76z1ysifnnm786lg9kiiijcwv76qy95in9ks"))))
     (build-system gnu-build-system)
     (arguments
-     `(#:parallel-tests? #f
-       #:configure-flags (list (string-append "--prefix="
-                                              (assoc-ref %outputs "out")))
-       #:make-flags (let ((target ,(%current-target-system)))
-                      (list ,(string-append "CC="
-                                            (cc-for-target))))
-       #:test-target "test"))
+     (list
+      #:parallel-tests? #f
+      #:configure-flags #~(list (string-append "--prefix=" #$output))
+      #:make-flags #~(list (string-append "CC=" #$(cc-for-target)))
+      #:test-target "test"))
     (inputs (list lcrq librecast libsodium libbsd))
     (home-page "https://librecast.net/lcsync.html")
     (synopsis "Librecast file and data syncing tool")
@@ -525,13 +529,12 @@ GLib-based library, libnice, as well as GStreamer elements to use it.")
         (base32 "01m0q4n2hy3csbzil8ivjyzb1mh4w9jlh9iiv6z53kasl7aas27i"))))
     (build-system gnu-build-system)
     (arguments
-     `(#:parallel-tests? #f
-       #:make-flags (let ((target ,(%current-target-system)))
-                      (list ,(string-append "CC="
-                                            (cc-for-target))
-                            (string-append "PREFIX="
-                                           (assoc-ref %outputs "out"))))
-       #:test-target "test"))
+     (list
+      #:parallel-tests? #f
+      #:make-flags
+      #~(list (string-append "CC=" #$(cc-for-target))
+              (string-append "PREFIX=" #$output))
+      #:test-target "test"))
     (inputs (list libsodium lcrq libbsd))
     (synopsis "IPv6 multicast library")
     (description "Librecast is a C library which supports IPv6 multicast
@@ -832,7 +835,7 @@ at the link-layer level.")
              (substitute* "src/supplemental/websocket/CMakeLists.txt"
                (("nng_test\\(wssfile_test\\)") "")))))))
     (native-inputs (list oksh))
-    (inputs (list mbedtls-apache))
+    (inputs (list mbedtls-lts))
     (synopsis "Lightweight messaging library")
     (description "NNG project is a rewrite of the scalability protocols library
 known as libnanomsg, and adds significant new capabilities, while retaining
@@ -1775,23 +1778,23 @@ of the same name.")
 (define-public wireshark
   (package
     (name "wireshark")
-    (version "4.0.7")
+    (version "4.2.3")
     (source
      (origin
        (method url-fetch)
        (uri (string-append "https://www.wireshark.org/download/src/wireshark-"
                            version ".tar.xz"))
        (sha256
-        (base32 "0xw7iagh37y02qgzgmb2xf1qagbphv5lpgra8lq3x0pzrc27p7x7"))))
-    (build-system cmake-build-system)
+        (base32 "04aqg5w8yfikqc1446c2zr2h4yyd5napwkhskdvr2galdycxb2wm"))))
+    (build-system qt-build-system)
     (arguments
      (list
       ;; This causes the plugins to register runpaths for the wireshark
       ;; libraries, which would otherwise cause the validate-runpath phase to
       ;; fail.
-      #:configure-flags #~(list (string-append "-DCMAKE_MODULE_LINKER_FLAGS="
-                                               "-Wl,-rpath=" #$output "/lib")
-                                "-DUSE_qt6=ON")
+      #:qtbase qtbase
+      #:configure-flags
+      #~(list (string-append "-DCMAKE_MODULE_LINKER_FLAGS=-Wl,-rpath=" #$output "/lib"))
       #:phases
       #~(modify-phases %standard-phases
           (replace 'check
@@ -1800,11 +1803,7 @@ of the same name.")
                 (invoke "ctest" "-VV"
                         "-j" (if parallel-tests?
                                  (number->string (parallel-job-count))
-                                 "1")
-                        ;; Skip the suite_extcaps.case_extcaps.test_sdjournal
-                        ;; test as it requires sdjournal (from systemd) and
-                        ;; fails.
-                        "-E" "suite_extcaps")))))))
+                                 "1"))))))))
     (inputs
      (list c-ares
            glib
@@ -1817,7 +1816,7 @@ of the same name.")
            libssh
            libxml2
            lz4
-           lua
+           lua-5.2
            mit-krb5
            `(,nghttp2 "lib")
            minizip
@@ -1828,6 +1827,7 @@ of the same name.")
            qtsvg
            sbc
            snappy
+           speexdsp
            zlib
            `(,zstd "lib")))
     (native-inputs
@@ -1843,7 +1843,7 @@ of the same name.")
     (description "Wireshark is a network protocol analyzer, or @dfn{packet
 sniffer}, that lets you capture and interactively browse the contents of
 network frames.")
-    (home-page "https://www.wireshark.org/")
+    (home-page "https://www.wireshark.org")
     (license license:gpl2+)))
 
 (define-public fping
@@ -3993,8 +3993,8 @@ A very simple IM client working over the DHT.
 
 (define-public dhtnet
   ;; There is no tag nor release; use the latest available commit.
-  (let ((revision "0")
-        (commit "8b6e99fd34f150fde5f21f3a57e0e9f28174c70c"))
+  (let ((revision "1")
+        (commit "41848a2c770d7eb0940d731014b81643f85e0d07"))
     (package
       (name "dhtnet")
       ;; The base version is taken from the CMakeLists.txt file.
@@ -4007,7 +4007,7 @@ A very simple IM client working over the DHT.
                 (file-name (git-file-name name version))
                 (sha256
                  (base32
-                  "1yhygsimcl9j6hbww1b77am1kgbcriczslcrfb838nbfh18n1780"))))
+                  "18v2pjrxfrd26p2z27s90marx7b593nz1xwi47lnp2ja7lm1pj4m"))))
       (outputs (list "out" "debug"))
       (build-system cmake-build-system)
       (arguments
@@ -4038,7 +4038,8 @@ A very simple IM client working over the DHT.
              opendht
              libupnp
              pjproject-jami
-             readline))
+             readline
+             yaml-cpp))
       (home-page "https://github.com/savoirfairelinux/dhtnet/")
       (synopsis "OpenDHT network library for C++")
       (description "The @code{dhtnet} is a C++ library providing abstractions
@@ -4558,7 +4559,7 @@ network.")
 (define-public ngtcp2
   (package
     (name "ngtcp2")
-    (version "1.1.0")
+    (version "1.3.0")
     (source
      (origin
        (method url-fetch)
@@ -4566,14 +4567,14 @@ network.")
                            "releases/download/v" version "/"
                            "ngtcp2-" version ".tar.xz"))
        (sha256
-        (base32 "1pppl6s25hz91w6321g1q7dqvfy4vccz9mmc5r8sfdvdc95fngl0"))))
+        (base32 "16qkik9185ygkr351a7q59l1rv6dzw51j4f7vkzfvzh385kqdqy3"))))
     (build-system gnu-build-system)
     (arguments
      (list
       #:configure-flags
       ;; openssl package does not support QUIC interface, so just gnutls
       #~(list "--with-gnutls")))
-    (native-inputs (list cunit pkg-config))
+    (native-inputs (list pkg-config))
     (inputs (list gnutls))
     (home-page "https://nghttp2.org/ngtcp2/")
     (synopsis "QUIC protocol implementation")
@@ -4677,6 +4678,91 @@ IPv6 Internet connectivity - it also works over IPv4.")
      ;; which apply to the Application, with which you must still comply
      license:lgpl3)))
 
+(define-public nebula
+  (package
+    (name "nebula")
+    (version "1.8.2")
+    (source (origin
+              (method git-fetch)
+              (uri (git-reference
+                    (url "https://github.com/slackhq/nebula")
+                    (commit (string-append "v" version))))
+              (file-name (git-file-name name version))
+              (sha256
+               (base32
+                "0ly1axgmskrkmxhzymqis6gxf2wd7rvhycm94wfb8k0hirndvg5m"))
+              ;; Remove windows-related binary blobs and files
+              (snippet
+               #~(begin
+                   (use-modules (guix build utils))
+                   (delete-file-recursively "dist/windows")
+                   (delete-file-recursively "wintun")))))
+    (build-system go-build-system)
+    (arguments
+     (list
+      #:go go-1.20
+      #:import-path "github.com/slackhq/nebula"
+      #:install-source? #f
+      #:phases
+      #~(modify-phases %standard-phases
+          (replace 'build
+            (lambda* (#:key import-path #:allow-other-keys)
+              ;; Suggested option to provide build time flags is not supported
+              ;; in Guix for go-build-system.
+              ;; -ldflags "-X main.Build=SOMEVERSION"
+              (substitute* (string-append "src/" import-path "/cmd/nebula/main.go")
+                (("Version: ")
+                 (string-append "Version: " #$version)))
+              ;; Build nebula and nebula-cert
+              (let* ((dir "github.com/slackhq/nebula")
+                     (nebula-cmd (string-append dir "/cmd/nebula"))
+                     (cert-cmd (string-append dir "/cmd/nebula-cert")))
+                (invoke "go" "build" nebula-cmd)
+                (invoke "go" "build" cert-cmd))))
+          (replace 'install
+            (lambda _
+              (let* ((out #$output)
+                     (bindir (string-append out "/bin")))
+                (install-file "nebula" bindir)
+                (install-file "nebula-cert" bindir)))))))
+    (inputs
+     (list go-dario-cat-mergo
+           go-github-com-anmitsu-go-shlex
+           go-github-com-armon-go-radix
+           go-github-com-cespare-xxhash
+           go-github-com-cyberdelia-go-metrics-graphite
+           go-github-com-flynn-noise
+           go-github-com-gogo-protobuf
+           go-github-com-google-gopacket
+           go-github-com-miekg-dns
+           go-github-com-nbrownus-go-metrics-prometheus
+           go-github-com-prometheus-client-golang
+           go-github-com-prometheus-client-model
+           go-github-com-prometheus-procfs
+           go-github-com-rcrowley-go-metrics
+           go-github-com-sirupsen-logrus
+           go-github-com-skip2-go-qrcode
+           go-github-com-songgao-water
+           go-github-com-stretchr-testify
+           go-golang-org-x-crypto
+           go-golang-org-x-net
+           go-golang-org-x-sys
+           go-golang-org-x-term
+           go-google-golang-org-protobuf
+           go-gopkg-in-yaml-v2
+           go-netlink
+           go-netns))
+    (home-page "https://github.com/slackhq/nebula")
+    (synopsis "Scalable, peer-to-peer overlay networking tool")
+    (description
+     "Nebula is a peer-to-peer networking tool based on the
+@url{https://noiseprotocol.org/, Noise Protocol Framework}.  It is not a fully
+decentralized network, but instead uses central discovery nodes and a
+certificate authority to facilitate direct, encrypted peer-to-peer connections
+from behind most firewalls and @acronym{NAT, Network Address Translation}
+layers.")
+    (license license:expat)))
+
 (define-public netdiscover
   (package
    (name "netdiscover")
@@ -4708,7 +4794,7 @@ on hub/switched networks.  It is based on @acronym{ARP} packets, it will send
 (define-public phantomsocks
   (package
     (name "phantomsocks")
-    (version "0.0.0-20231031033204-8b0ac27fc450")
+    (version "0.0.0-20240125140126-2576269ca69a")
     (source (origin
               (method git-fetch)
               (uri (git-reference
@@ -4717,10 +4803,10 @@ on hub/switched networks.  It is based on @acronym{ARP} packets, it will send
               (file-name (git-file-name name version))
               (sha256
                (base32
-                "1q4i8pgj6hzry9wzlczx729dmmgqdqfb26rfaim2ngmp1dyy9drl"))))
+                "1kbcr6580a9pi0a3wssnfr3mnxqq2k9w1fg4khikn82lqaljab2f"))))
     (build-system go-build-system)
     (arguments
-     (list #:go go-1.20
+     (list #:go go-1.21
            #:install-source? #f
            #:import-path "github.com/macronut/phantomsocks"
            #:build-flags #~'("-tags" #$(if (target-linux?)
@@ -4785,6 +4871,7 @@ Transfer Protocol} and older @acronym{SCP, Secure Copy Protocol}
 implementations.")
     (home-page "https://www.chiark.greenend.org.uk/~sgtatham/putty/")
     (license license:expat)))
+
 
 (define-public vnstat
   (package
