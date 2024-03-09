@@ -3894,7 +3894,7 @@ TkDiff is included for browsing and merging your changes.")
      (list
       #:tests? #f                       ;No tests.
       #:imported-modules
-      `(,@%gnu-build-system-modules
+      `(,@%default-gnu-imported-modules
         (guix build python-build-system))
       #:modules
       '((guix build gnu-build-system)
