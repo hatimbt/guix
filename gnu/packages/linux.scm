@@ -4241,7 +4241,16 @@ to use Linux' inotify mechanism, which allows file accesses to be monitored.")
                                (symlink "kmod"
                                         (string-append #$output "/bin/" tool)))
                              '("insmod" "rmmod" "lsmod" "modprobe"
-                               "modinfo" "depmod")))))))
+                               "modinfo" "depmod"))))
+               (add-after 'install 'remove-libtool-archives
+                 ;; Libtool archives lists the whole transitive dependencies,
+                 ;; which is unnecessary unless producing static archives and
+                 ;; leads to overlinking, e.g. causing the build of
+                 ;; libblockdev to fail due to attempting to link with zstd.
+                 (lambda _
+                   (for-each delete-file
+                             (find-files (string-append #$output "/lib")
+                                         "\\.la$")))))))
     (native-inputs (list pkg-config zstd)) ;zstd needed for tests
     (inputs (list xz zlib `(,zstd "lib")))
     (supported-systems (delete "i586-gnu" %supported-systems))
